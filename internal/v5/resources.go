@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"gopkg.in/errgo.v1"
+	"gopkg.in/juju/charm.v6-unstable"
 	"gopkg.in/juju/charm.v6-unstable/resource"
 	"gopkg.in/juju/charmrepo.v2-unstable/csclient/params"
 
@@ -27,19 +28,29 @@ func (h *ReqHandler) metaResources(entity *mongodoc.Entity, id *router.ResolvedU
 		panic("entity missing charm metadata")
 	}
 
-	// TODO(ericsnow) Handle flags.
-	// TODO(ericsnow) Use h.Store.ListResources() once that exists.
-	resources, err := basicListResources(entity)
+	channel, err := h.entityChannel(id)
 	if err != nil {
-		return nil, err
+		// Given the current implementation of entityChannel(), this
+		// should not fail. However, we handle the error here for the
+		// sake of future changes to entityChannel().
+		return nil, errgo.Mask(err)
 	}
+
+	// TODO(ericsnow) Handle flags.
+	docs, err := h.Store.ListResources(entity, channel)
+	if err != nil {
+		return nil, errgo.Mask(err)
+	}
+
 	var results []params.Resource
-	for _, res := range resources {
-		result := params.Resource2API(res)
+	for _, doc := range docs {
+		result := resource2api(doc, entity.CharmMeta)
 		results = append(results, result)
 	}
 	return results, nil
 }
+
+// TODO(ericsnow) Drop this.
 
 func basicListResources(entity *mongodoc.Entity) ([]resource.Resource, error) {
 	var resources []resource.Resource
@@ -83,4 +94,29 @@ func (h *ReqHandler) serveDownloadResource(id *router.ResolvedURL, w http.Respon
 
 func (h *ReqHandler) serveUploadResource(id *router.ResolvedURL, w http.ResponseWriter, req *http.Request) error {
 	return errNotImplemented
+}
+
+func resource2api(doc *mongodoc.Resource, chMeta *charm.Meta) params.Resource {
+	meta := chMeta.Resources[doc.Name]
+	apiRes := params.Resource{
+		Name:        doc.Name,
+		Type:        meta.Type.String(),
+		Path:        meta.Path,
+		Description: meta.Description,
+		Origin:      resource.OriginStore.String(),
+		Revision:    doc.Revision,
+		Fingerprint: doc.Fingerprint,
+		Size:        doc.Size,
+	}
+	if len(doc.Fingerprint) == 0 {
+		// The resource has not been uploaded yet. Hence it must be
+		// provided directly by the user to the Juju controller. We
+		// indicate this by changing the origin to "upload".
+		apiRes.Origin = resource.OriginUpload.String()
+
+		// We also ensure that the fingerprint isn't nil in order
+		// to produce consistent results.
+		apiRes.Fingerprint = []byte{}
+	}
+	return apiRes
 }
