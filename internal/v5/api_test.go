@@ -530,7 +530,11 @@ var metaEndpoints = []metaEndpoint{{
 }, {
 	name: "resources",
 	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
-		results, err := store.ListResources(url)
+		entity, err := store.FindEntity(url, nil)
+		if err != nil {
+			return nil, err
+		}
+		results, err := store.ListResources(entity)
 		if err != nil {
 			return results, err
 		}

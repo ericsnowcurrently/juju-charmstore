@@ -235,7 +235,7 @@ func RouterHandlers(h *ReqHandler) *router.Handlers {
 			"perm":             h.puttableBaseEntityHandler(h.metaPerm, h.putMetaPerm, "acls", "developmentacls"),
 			"perm/":            h.puttableBaseEntityHandler(h.metaPermWithKey, h.putMetaPermWithKey, "acls", "developmentacls"),
 			"promulgated":      h.baseEntityHandler(h.metaPromulgated, "promulgated"),
-			"resources":        h.EntityHandler(h.metaResources, "_id"),
+			"resources":        h.EntityHandler(h.metaResources, "_id", "charmmeta"),
 			"revision-info":    router.SingleIncludeHandler(h.metaRevisionInfo),
 			"stats":            h.EntityHandler(h.metaStats),
 			"supported-series": h.EntityHandler(h.metaSupportedSeries, "supportedseries"),
@@ -592,7 +592,7 @@ func badRequestf(underlying error, f string, a ...interface{}) error {
 // GET id/meta/charm-resources
 // https://github.com/juju/charmstore/blob/v4/docs/API.md#get-idmetacharm-resources
 func (h *ReqHandler) metaResources(entity *mongodoc.Entity, id *router.ResolvedURL, path string, flags url.Values, req *http.Request) (interface{}, error) {
-	return h.Store.ListResources(id)
+	return h.Store.ListResources(entity)
 }
 
 // GET id/meta/charm-metadata
