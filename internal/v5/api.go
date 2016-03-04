@@ -526,34 +526,6 @@ func (h *ReqHandler) serveDebug(w http.ResponseWriter, req *http.Request) {
 	router.WriteError(w, errNotImplemented)
 }
 
-// POST id/resources/name
-// https://github.com/juju/charmstore/blob/v5/docs/API.md#post-idresourcesname
-//
-// GET  id/resources/name[/revision]
-// https://github.com/juju/charmstore/blob/v5/docs/API.md#get-idresourcesnamerevision
-func (h *ReqHandler) serveResources(id *router.ResolvedURL, w http.ResponseWriter, req *http.Request) error {
-	// Resources are "published" using "PUT id/publish" so we don't
-	// support PUT here.
-	// TODO(ericsnow) Support DELETE to remove a resource?
-	// (like serveArchive() does)
-	switch req.Method {
-	case "GET":
-		return h.serveDownloadResource(id, w, req)
-	case "POST":
-		return h.serveUploadResource(id, w, req)
-	default:
-		return errgo.WithCausef(nil, params.ErrMethodNotAllowed, "%s not allowed", req.Method)
-	}
-}
-
-func (h *ReqHandler) serveDownloadResource(id *router.ResolvedURL, w http.ResponseWriter, req *http.Request) error {
-	return errNotImplemented
-}
-
-func (h *ReqHandler) serveUploadResource(id *router.ResolvedURL, w http.ResponseWriter, req *http.Request) error {
-	return errNotImplemented
-}
-
 // GET id/expand-id
 // https://docs.google.com/a/canonical.com/document/d/1TgRA7jW_mmXoKH3JiwBbtPvQu7WiM6XMrz1wSrhTMXw/edit#bookmark=id.4xdnvxphb2si
 func (h *ReqHandler) serveExpandId(id *router.ResolvedURL, w http.ResponseWriter, req *http.Request) error {
@@ -603,12 +575,6 @@ func badRequestf(underlying error, f string, a ...interface{}) error {
 	err := errgo.WithCausef(underlying, params.ErrBadRequest, f, a...)
 	err.(*errgo.Err).SetLocation(1)
 	return err
-}
-
-// GET id/meta/charm-resources
-// https://github.com/juju/charmstore/blob/v4/docs/API.md#get-idmetacharm-resources
-func (h *ReqHandler) metaResources(entity *mongodoc.Entity, id *router.ResolvedURL, path string, flags url.Values, req *http.Request) (interface{}, error) {
-	return h.Store.ListResources(entity)
 }
 
 // GET id/meta/charm-metadata
