@@ -57,15 +57,21 @@ type Resource struct {
 	DocID    string     `bson:"_id"`
 	CharmURL *charm.URL `bson:"charm-url"`
 
+	// These fields correspond to those of charm/resource.Meta.
 	Name        string `bson:"name"`
 	Type        string `bson:"type"`
 	Path        string `bson:"path"`
 	Description string `bson:"comment"`
 
+	// These fields correspond to those of charm/resource.Resource.
 	Origin      string `bson:"origin"`
 	Revision    int    `bson:"revision"`
 	Fingerprint []byte `bson:"fingerprint"`
 	Size        int64  `bson:"size"`
+
+	// BlobName holds the name that the resource blob is given in the
+	// blob store.
+	BlobName string
 }
 
 // Resource2Doc converts the resource into a DB doc.
