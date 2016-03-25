@@ -527,6 +527,68 @@ var metaEndpoints = []metaEndpoint{{
 		c.Assert(data, gc.DeepEquals, []string{"terms-1/1", "terms-2/5"})
 	},
 }, {
+	name: "resource/for-store",
+	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
+		entity, err := store.FindEntity(url, nil)
+		if err != nil {
+			return &params.Resource{}, err
+		}
+		if entity.URL.Series == "bundle" {
+			return &params.Resource{}, nil
+		}
+		docs, err := store.ListResources(entity, params.UnpublishedChannel)
+		if err != nil {
+			return &params.Resource{}, err
+		}
+		for _, doc := range docs {
+			if doc.Name == "for-store" {
+				return v5.Resource2API(doc, entity.CharmMeta), nil
+			}
+		}
+		return v5.Resource2API(&mongodoc.Resource{Name: "for-store"}, entity.CharmMeta), nil
+	},
+	exclusive: charmOnly,
+	checkURL:  newResolvedURL("cs:~charmers/utopic/starsay-17", 17),
+	assertCheckData: func(c *gc.C, data interface{}) {
+		c.Assert(data, jc.DeepEquals, params.Resource{
+			Name:        "for-store",
+			Type:        "file",
+			Path:        "dummy.tgz",
+			Description: "One line that is useful when operators need to push it.",
+			Origin:      "upload",
+		})
+	},
+}, {
+	name: "resource/for-store/1",
+	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
+		entity, err := store.FindEntity(url, nil)
+		if err != nil {
+			return params.Resource{}, err
+		}
+		if entity.URL.Series == "bundle" {
+			return params.Resource{}, nil
+		}
+		doc, err := store.ResourceInfo(entity, "for-store", 1)
+		if charmstore.IsResourceNotFound(err) {
+			doc = &mongodoc.Resource{Name: "for-store"}
+		} else if err != nil {
+			return params.Resource{}, nil
+		}
+		result := v5.Resource2API(doc, entity.CharmMeta)
+		return result, nil
+	},
+	exclusive: charmOnly,
+	checkURL:  newResolvedURL("cs:~charmers/utopic/starsay-17", 17),
+	assertCheckData: func(c *gc.C, data interface{}) {
+		c.Assert(data, jc.DeepEquals, params.Resource{
+			Name:        "for-store",
+			Type:        "file",
+			Path:        "dummy.tgz",
+			Description: "One line that is useful when operators need to push it.",
+			Origin:      "upload",
+		})
+	},
+}, {
 	name: "resources",
 	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
 		entity, err := store.FindEntity(url, nil)
@@ -627,21 +689,31 @@ func (s *APISuite) TestAllMetaEndpointsTested(c *gc.C) {
 	var list []string
 	err := json.Unmarshal(rec.Body.Bytes(), &list)
 	c.Assert(err, gc.IsNil)
+	c.Logf("meta endpoints: %s", list)
 
-	listNames := make(map[string]bool)
+	listNamesMap := make(map[string]bool)
 	for _, name := range list {
-		c.Assert(listNames[name], gc.Equals, false, gc.Commentf("name %s", name))
-		listNames[name] = true
+		c.Assert(listNamesMap[name], gc.Equals, false, gc.Commentf("name %s", name))
+		listNamesMap[name] = true
 	}
+	sort.Strings(list)
 
-	testNames := make(map[string]bool)
+	var testNames []string
+	resFound := false
 	for _, test := range metaEndpoints {
 		if strings.Contains(test.name, "/") {
+			if strings.HasPrefix(test.name, "resource/") {
+				resFound = true
+			}
 			continue
 		}
-		testNames[test.name] = true
+		testNames = append(testNames, test.name)
 	}
-	c.Assert(testNames, jc.DeepEquals, listNames)
+	if resFound {
+		testNames = append(testNames, "resource")
+	}
+	sort.Strings(testNames)
+	c.Check(testNames, jc.DeepEquals, list)
 }
 
 var testEntities = []*router.ResolvedURL{

@@ -6,15 +6,69 @@ package v5 // import "gopkg.in/juju/charmstore.v5-unstable/internal/v5"
 import (
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 
 	"gopkg.in/errgo.v1"
 	"gopkg.in/juju/charm.v6-unstable"
 	"gopkg.in/juju/charm.v6-unstable/resource"
 	"gopkg.in/juju/charmrepo.v2-unstable/csclient/params"
 
+	"gopkg.in/juju/charmstore.v5-unstable/internal/charmstore"
 	"gopkg.in/juju/charmstore.v5-unstable/internal/mongodoc"
 	"gopkg.in/juju/charmstore.v5-unstable/internal/router"
 )
+
+var metaResourceRE = regexp.MustCompile(`^/?([^/$]+)(?:/(\d+))?$`)
+
+// GET id/meta/resource/name
+// https://github.com/juju/charmstore/blob/v5/docs/API.md#get-idmetaresource
+func (h *ReqHandler) metaResource(entity *mongodoc.Entity, id *router.ResolvedURL, path string, flags url.Values, req *http.Request) (interface{}, error) {
+	if entity.URL.Series == "bundle" {
+		// Bundles do not have resources so we return an empty result.
+		return params.Resource{}, nil
+	}
+	if entity.CharmMeta == nil {
+		// This shouldn't happen, but we'll play it safe.
+		return params.Resource{}, nil
+	}
+
+	parts := metaResourceRE.FindStringSubmatch(path)
+	if parts == nil {
+		return params.Resource{}, errgo.WithCausef(nil, params.ErrBadRequest, "bad path for resource info")
+	}
+	resName := parts[1]
+	revStr := parts[2]
+
+	// TODO(ericsnow) Handle flags.
+	var doc *mongodoc.Resource
+	if revStr == "" {
+		// TODO(ericsnow) Add Store.LatestResourceInfo()?
+		docs, err := h.Store.ListResources(entity, params.UnpublishedChannel)
+		if err != nil {
+			return params.Resource{}, errgo.Mask(err)
+		}
+		doc = &mongodoc.Resource{Name: resName} // used if not found
+		for _, actual := range docs {
+			if actual.Name == resName {
+				doc = actual
+			}
+		}
+		// TODO(ericsnow) Fail if not found?
+	} else {
+		revision, _ := strconv.Atoi(revStr) // The regex guarantees an int.
+		actual, err := h.Store.ResourceInfo(entity, resName, revision)
+		if charmstore.IsResourceNotFound(err) {
+			// TODO(ericsnow) Fail?
+			actual = &mongodoc.Resource{Name: resName}
+		} else if err != nil {
+			return params.Resource{}, errgo.Mask(err)
+		}
+		doc = actual
+	}
+	result := Resource2API(doc, entity.CharmMeta)
+	return result, nil
+}
 
 // GET id/meta/resources
 // https://github.com/juju/charmstore/blob/v5/docs/API.md#get-idmetaresources
@@ -81,9 +135,23 @@ func (h *ReqHandler) serveUploadResource(id *router.ResolvedURL, w http.Response
 // Resource2API converts a resource doc into the corresponding
 // params type.
 func Resource2API(doc *mongodoc.Resource, chMeta *charm.Meta) params.Resource {
-	meta := chMeta.Resources[doc.Name]
+	apiRes := resource2api(doc, chMeta)
+	if len(doc.Fingerprint) == 0 {
+		// We ensure that the fingerprint isn't nil in order
+		// to produce consistent results.
+		apiRes.Fingerprint = []byte{}
+	}
+	return apiRes
+}
+
+func resource2api(doc *mongodoc.Resource, chMeta *charm.Meta) params.Resource {
+	meta, inMeta := chMeta.Resources[doc.Name]
+	if !inMeta {
+		return params.Resource{}
+	}
+
 	apiRes := params.Resource{
-		Name:        doc.Name,
+		Name:        meta.Name,
 		Type:        meta.Type.String(),
 		Path:        meta.Path,
 		Description: meta.Description,
@@ -97,10 +165,6 @@ func Resource2API(doc *mongodoc.Resource, chMeta *charm.Meta) params.Resource {
 		// provided directly by the user to the Juju controller. We
 		// indicate this by changing the origin to "upload".
 		apiRes.Origin = resource.OriginUpload.String()
-
-		// We also ensure that the fingerprint isn't nil in order
-		// to produce consistent results.
-		apiRes.Fingerprint = []byte{}
 	}
 	return apiRes
 }
