@@ -24,7 +24,6 @@ import (
 	gc "gopkg.in/check.v1"
 	"gopkg.in/errgo.v1"
 	"gopkg.in/juju/charm.v6-unstable"
-	"gopkg.in/juju/charm.v6-unstable/resource"
 	"gopkg.in/juju/charmrepo.v2-unstable/csclient/params"
 	"gopkg.in/macaroon-bakery.v1/bakery"
 	"gopkg.in/macaroon-bakery.v1/bakery/checkers"
@@ -537,19 +536,19 @@ var metaEndpoints = []metaEndpoint{{
 		if entity.URL.Series == "bundle" {
 			return []params.Resource{}, nil
 		}
-		// TODO(ericsnow) Switch to store.ListResources() once it exists.
-		resources, err := basicListResources(entity)
+		channel := params.UnpublishedChannel // the default
+		docs, err := store.ListResources(entity, channel)
 		if err != nil {
-			return resources, err
+			return docs, err
 		}
 		// Apparently the router's "isNull" check treats empty slices
 		// as nil...
-		if len(resources) == 0 {
+		if len(docs) == 0 {
 			return nil, nil
 		}
 		var results []params.Resource
-		for _, res := range resources {
-			result := params.Resource2API(res)
+		for _, doc := range docs {
+			result := v5.Resource2API(doc, entity.CharmMeta)
 			results = append(results, result)
 		}
 		return results, nil
@@ -599,22 +598,6 @@ var metaEndpoints = []metaEndpoint{{
 		})
 	},
 }}
-
-func basicListResources(entity *mongodoc.Entity) ([]resource.Resource, error) {
-	var resources []resource.Resource
-	for _, meta := range entity.CharmMeta.Resources {
-		// We use an origin of "upload" since charms cannot be uploaded yet.
-		resOrigin := resource.OriginUpload
-		res := resource.Resource{
-			Meta:   meta,
-			Origin: resOrigin,
-			// Revision, Fingerprint, and Size are not set.
-		}
-		resources = append(resources, res)
-	}
-	resource.Sort(resources)
-	return resources, nil
-}
 
 // TestEndpointGet tries to ensure that the endpoint
 // test data getters correspond with reality.

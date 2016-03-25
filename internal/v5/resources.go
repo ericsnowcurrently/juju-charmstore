@@ -44,28 +44,10 @@ func (h *ReqHandler) metaResources(entity *mongodoc.Entity, id *router.ResolvedU
 
 	var results []params.Resource
 	for _, doc := range docs {
-		result := resource2api(doc, entity.CharmMeta)
+		result := Resource2API(doc, entity.CharmMeta)
 		results = append(results, result)
 	}
 	return results, nil
-}
-
-// TODO(ericsnow) Drop this.
-
-func basicListResources(entity *mongodoc.Entity) ([]resource.Resource, error) {
-	var resources []resource.Resource
-	for _, meta := range entity.CharmMeta.Resources {
-		// We use an origin of "upload" since resources cannot be uploaded yet.
-		resOrigin := resource.OriginUpload
-		res := resource.Resource{
-			Meta:   meta,
-			Origin: resOrigin,
-			// Revision, Fingerprint, and Size are not set.
-		}
-		resources = append(resources, res)
-	}
-	resource.Sort(resources)
-	return resources, nil
 }
 
 // POST id/resources/name
@@ -96,7 +78,9 @@ func (h *ReqHandler) serveUploadResource(id *router.ResolvedURL, w http.Response
 	return errNotImplemented
 }
 
-func resource2api(doc *mongodoc.Resource, chMeta *charm.Meta) params.Resource {
+// Resource2API converts a resource doc into the corresponding
+// params type.
+func Resource2API(doc *mongodoc.Resource, chMeta *charm.Meta) params.Resource {
 	meta := chMeta.Resources[doc.Name]
 	apiRes := params.Resource{
 		Name:        doc.Name,
