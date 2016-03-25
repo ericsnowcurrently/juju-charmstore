@@ -22,6 +22,12 @@ import (
 
 var resourceNotFound = errgo.Newf("resource not found")
 
+// IsResourceNotFound determines whether or not the error indicates
+// a resource was not found in the charm store.
+func IsResourceNotFound(err error) bool {
+	return errgo.Cause(err) == resourceNotFound
+}
+
 // ListResources returns the set of resources for the charm. If the
 // unpublished channel is specified then set is composed of the latest
 // revision for each resource. Otherwise it holds the revisions declared
@@ -63,7 +69,7 @@ func (s Store) ResourceInfo(entity *mongodoc.Entity, name string, revision int) 
 	}
 	doc, err := s.resource(entity.BaseURL, name, revision)
 	if err != nil {
-		return nil, errgo.Mask(err)
+		return nil, errgo.Mask(err, errgo.Is(resourceNotFound))
 	}
 	return doc, nil
 }
