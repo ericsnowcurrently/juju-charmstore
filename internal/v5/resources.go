@@ -6,6 +6,8 @@ package v5 // import "gopkg.in/juju/charmstore.v5-unstable/internal/v5"
 import (
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 
 	"gopkg.in/errgo.v1"
 	"gopkg.in/juju/charm.v6-unstable/resource"
@@ -14,6 +16,54 @@ import (
 	"gopkg.in/juju/charmstore.v5-unstable/internal/mongodoc"
 	"gopkg.in/juju/charmstore.v5-unstable/internal/router"
 )
+
+var metaResourceRE = regexp.MustCompile(`^/?([^/$]+)(?:/(\d+))?$`)
+
+// GET id/meta/resource/name/revision
+// https://github.com/juju/charmstore/blob/v5/docs/API.md#get-idmetaresource
+func (h *ReqHandler) metaResource(entity *mongodoc.Entity, id *router.ResolvedURL, path string, flags url.Values, req *http.Request) (interface{}, error) {
+	if entity.URL.Series == "bundle" {
+		// Bundles do not have resources so we return an empty result.
+		return params.Resource{}, nil
+	}
+	if entity.CharmMeta == nil {
+		// This shouldn't happen, but we'll play it safe.
+		return params.Resource{}, nil
+	}
+	// TODO(ericsnow) Handle flags.
+
+	parts := metaResourceRE.FindStringSubmatch(path)
+	if parts == nil {
+		return params.Resource{}, errgo.WithCausef(nil, params.ErrBadRequest, "bad path for resource info")
+	}
+	resName := parts[1]
+	revStr := parts[2]
+	revision, _ := strconv.Atoi(revStr) // The regex guarantees an int.
+
+	res, err := basicResourceInfo(entity, resName, revision)
+	if err != nil {
+		return params.Resource{}, errgo.Mask(err)
+	}
+	result := params.Resource2API(res)
+
+	return result, nil
+}
+
+func basicResourceInfo(entity *mongodoc.Entity, name string, revision int) (resource.Resource, error) {
+	var res resource.Resource
+	if entity.URL.Series == "bundle" {
+		return res, badRequestf(nil, "bundles do not have resources")
+	}
+	if entity.CharmMeta == nil {
+		return res, errgo.Newf("entity missing charm metadata")
+	}
+
+	res.Meta = entity.CharmMeta.Resources[name]
+	if res.Name != "" {
+		res.Origin = resource.OriginUpload
+	}
+	return res, nil
+}
 
 // GET id/meta/resources
 // https://github.com/juju/charmstore/blob/v5/docs/API.md#get-idmetaresources

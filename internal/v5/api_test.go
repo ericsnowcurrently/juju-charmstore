@@ -528,6 +528,35 @@ var metaEndpoints = []metaEndpoint{{
 		c.Assert(data, gc.DeepEquals, []string{"terms-1/1", "terms-2/5"})
 	},
 }, {
+	name: "resource/for-store/1",
+	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
+		entity, err := store.FindEntity(url, nil)
+		if err != nil {
+			return params.Resource{}, err
+		}
+		if entity.URL.Series == "bundle" {
+			return params.Resource{}, nil
+		}
+		var res resource.Resource
+		res.Meta = entity.CharmMeta.Resources["for-store"]
+		if res.Name != "" {
+			res.Origin = resource.OriginUpload
+		}
+		result := params.Resource2API(res)
+		return result, nil
+	},
+	exclusive: charmOnly,
+	checkURL:  newResolvedURL("cs:~charmers/utopic/starsay-17", 17),
+	assertCheckData: func(c *gc.C, data interface{}) {
+		c.Assert(data, jc.DeepEquals, params.Resource{
+			Name:        "for-store",
+			Type:        "file",
+			Path:        "dummy.tgz",
+			Description: "One line that is useful when operators need to push it.",
+			Origin:      "upload",
+		})
+	},
+}, {
 	name: "resources",
 	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
 		entity, err := store.FindEntity(url, nil)
@@ -644,21 +673,31 @@ func (s *APISuite) TestAllMetaEndpointsTested(c *gc.C) {
 	var list []string
 	err := json.Unmarshal(rec.Body.Bytes(), &list)
 	c.Assert(err, gc.IsNil)
+	c.Logf("meta endpoints: %s", list)
 
 	listNames := make(map[string]bool)
 	for _, name := range list {
 		c.Assert(listNames[name], gc.Equals, false, gc.Commentf("name %s", name))
 		listNames[name] = true
 	}
+	sort.Strings(list)
 
-	testNames := make(map[string]bool)
+	var testNames []string
+	resFound := false
 	for _, test := range metaEndpoints {
 		if strings.Contains(test.name, "/") {
+			if strings.HasPrefix(test.name, "resource/") {
+				resFound = true
+			}
 			continue
 		}
-		testNames[test.name] = true
+		testNames = append(testNames, test.name)
 	}
-	c.Assert(testNames, jc.DeepEquals, listNames)
+	if resFound {
+		testNames = append(testNames, "resource")
+	}
+	sort.Strings(testNames)
+	c.Check(testNames, jc.DeepEquals, list)
 }
 
 var testEntities = []*router.ResolvedURL{
