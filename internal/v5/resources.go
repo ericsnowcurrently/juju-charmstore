@@ -17,7 +17,7 @@ import (
 	"gopkg.in/juju/charmstore.v5-unstable/internal/router"
 )
 
-var metaResourceRE = regexp.MustCompile(`^/?([^/$]+)(?:/(\d+))?$`)
+var metaResourceRE = regexp.MustCompile(`^/?([^/]+)/(\d+)$`)
 
 // GET id/meta/resource/name/revision
 // https://github.com/juju/charmstore/blob/v5/docs/API.md#get-idmetaresource
