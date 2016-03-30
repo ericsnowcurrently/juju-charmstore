@@ -29,8 +29,8 @@ func (h *ReqHandler) metaResource(entity *mongodoc.Entity, id *router.ResolvedUR
 		return params.Resource{}, nil
 	}
 	if entity.CharmMeta == nil {
-		// This shouldn't happen, but we'll play it safe.
-		return params.Resource{}, nil
+		// This shouldn't happen...
+		panic("entity missing charm metadata")
 	}
 
 	parts := metaResourceRE.FindStringSubmatch(path)
