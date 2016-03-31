@@ -17,13 +17,16 @@ import (
 	"gopkg.in/juju/charmstore.v5-unstable/internal/v5"
 )
 
-type ResourcesMetaSuite struct {
+var (
+	_ = gc.Suite(&ResourceMetaSuite{})
+	_ = gc.Suite(&ResourcesMetaSuite{})
+)
+
+type ResourceMetaSuite struct {
 	commonSuite
 }
 
-var _ = gc.Suite(&ResourcesMetaSuite{})
-
-func (s *ResourcesMetaSuite) TestResourceWithRevisionFound(c *gc.C) {
+func (s *ResourceMetaSuite) TestWithRevisionFound(c *gc.C) {
 	curl := charm.MustParseURL("cs:~charmers/utopic/starsay-17")
 	id, entity, ch := addCharm(c, s.store, curl)
 	s.setPublic(c, id)
@@ -38,7 +41,7 @@ func (s *ResourcesMetaSuite) TestResourceWithRevisionFound(c *gc.C) {
 	s.checkResource(c, curl, "for-store", revision, expected)
 }
 
-func (s *ResourcesMetaSuite) TestResourceWithRevisionResourceNotFound(c *gc.C) {
+func (s *ResourceMetaSuite) TestWithRevisionResourceNotFound(c *gc.C) {
 	curl := charm.MustParseURL("cs:~charmers/utopic/starsay-17")
 	id, entity, ch := addCharm(c, s.store, curl)
 	s.setPublic(c, id)
@@ -47,22 +50,22 @@ func (s *ResourcesMetaSuite) TestResourceWithRevisionResourceNotFound(c *gc.C) {
 	s.checkResource(c, curl, "who-dat", 0, nil)
 }
 
-func (s *ResourcesMetaSuite) TestResourceWithRevisionRevisionNotFound(c *gc.C) {
+func (s *ResourceMetaSuite) TestWithRevisionRevisionNotFound(c *gc.C) {
 }
 
-func (s *ResourcesMetaSuite) TestResourceWithoutRevisionFound(c *gc.C) {
+func (s *ResourceMetaSuite) TestWithoutRevisionFound(c *gc.C) {
 }
 
-func (s *ResourcesMetaSuite) TestResourceWithoutRevisionNotFound(c *gc.C) {
+func (s *ResourceMetaSuite) TestWithoutRevisionNotFound(c *gc.C) {
 }
 
-func (s *ResourcesMetaSuite) TestResourceBundle(c *gc.C) {
+func (s *ResourceMetaSuite) TestBundle(c *gc.C) {
 }
 
-func (s *ResourcesMetaSuite) TestResourceBadPath(c *gc.C) {
+func (s *ResourceMetaSuite) TestBadPath(c *gc.C) {
 }
 
-func (s *ResourcesMetaSuite) TestResourceNotAuthorized(c *gc.C) {
+func (s *ResourceMetaSuite) TestNotAuthorized(c *gc.C) {
 	curl := charm.MustParseURL("cs:~charmers/utopic/starsay-17")
 	_, entity, ch := addCharm(c, s.store, curl)
 	revisions, _ := addResources(c, s.store, entity, ch)
@@ -73,25 +76,7 @@ func (s *ResourcesMetaSuite) TestResourceNotAuthorized(c *gc.C) {
 	s.assertGetIsUnauthorized(c, path, "authentication failed: missing HTTP auth header")
 }
 
-func (s *ResourcesMetaSuite) TestResourcesPublishedFound(c *gc.C) {
-}
-
-func (s *ResourcesMetaSuite) TestResourcesNotPublishedWithChannel(c *gc.C) {
-}
-
-func (s *ResourcesMetaSuite) TestResourcesNotPublishedWithoutChannel(c *gc.C) {
-}
-
-func (s *ResourcesMetaSuite) TestResourcesNotPublishedNotFound(c *gc.C) {
-}
-
-func (s *ResourcesMetaSuite) TestResourcesBundle(c *gc.C) {
-}
-
-func (s *ResourcesMetaSuite) TestResourcesNotAuthorized(c *gc.C) {
-}
-
-func (s *ResourcesMetaSuite) checkResource(c *gc.C, curl *charm.URL, name string, revision int, expected interface{}) {
+func (s *ResourceMetaSuite) checkResource(c *gc.C, curl *charm.URL, name string, revision int, expected interface{}) {
 	charmID := strings.TrimPrefix(curl.String(), "cs:")
 	path := fmt.Sprintf("%s/meta/resource/%s", charmID, name)
 	if revision >= 0 {
@@ -111,4 +96,26 @@ func (s *ResourcesMetaSuite) checkResource(c *gc.C, curl *charm.URL, name string
 	} else {
 		s.assertGet(c, path, expected)
 	}
+}
+
+type ResourcesMetaSuite struct {
+	commonSuite
+}
+
+func (s *ResourcesMetaSuite) TestPublishedFound(c *gc.C) {
+}
+
+func (s *ResourcesMetaSuite) TestNotPublishedWithChannel(c *gc.C) {
+}
+
+func (s *ResourcesMetaSuite) TestNotPublishedWithoutChannel(c *gc.C) {
+}
+
+func (s *ResourcesMetaSuite) TestNotPublishedNotFound(c *gc.C) {
+}
+
+func (s *ResourcesMetaSuite) TestBundle(c *gc.C) {
+}
+
+func (s *ResourcesMetaSuite) TestNotAuthorized(c *gc.C) {
 }
