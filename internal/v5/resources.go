@@ -24,9 +24,10 @@ var metaResourceRE = regexp.MustCompile(`^/?([^/$]+)(?:/(\d+))?$`)
 // GET id/meta/resource/name
 // https://github.com/juju/charmstore/blob/v5/docs/API.md#get-idmetaresource
 func (h *ReqHandler) metaResource(entity *mongodoc.Entity, id *router.ResolvedURL, path string, flags url.Values, req *http.Request) (interface{}, error) {
+	var notFound *params.Resource
 	if entity.URL.Series == "bundle" {
 		// Bundles do not have resources so we return an empty result.
-		return params.Resource{}, nil
+		return notFound, nil
 	}
 	if entity.CharmMeta == nil {
 		// This shouldn't happen...
@@ -35,7 +36,7 @@ func (h *ReqHandler) metaResource(entity *mongodoc.Entity, id *router.ResolvedUR
 
 	parts := metaResourceRE.FindStringSubmatch(path)
 	if parts == nil {
-		return params.Resource{}, errgo.WithCausef(nil, params.ErrBadRequest, "bad path for resource info")
+		return nil, errgo.WithCausef(nil, params.ErrBadRequest, "bad path for resource info")
 	}
 	resName := parts[1]
 	revStr := parts[2]
@@ -46,28 +47,30 @@ func (h *ReqHandler) metaResource(entity *mongodoc.Entity, id *router.ResolvedUR
 		// TODO(ericsnow) Add Store.LatestResourceInfo()?
 		docs, err := h.Store.ListResources(entity, params.UnpublishedChannel)
 		if err != nil {
-			return params.Resource{}, errgo.Mask(err)
+			return nil, errgo.Mask(err)
 		}
-		doc = &mongodoc.Resource{Name: resName} // used if not found
 		for _, actual := range docs {
 			if actual.Name == resName {
 				doc = actual
 			}
 		}
-		// TODO(ericsnow) Fail if not found?
+		if doc == nil {
+			// The router converts nil into params.ErrMetadataNotFound.
+			return notFound, nil
+		}
 	} else {
 		revision, _ := strconv.Atoi(revStr) // The regex guarantees an int.
 		actual, err := h.Store.ResourceInfo(entity, resName, revision)
 		if charmstore.IsResourceNotFound(err) {
-			// TODO(ericsnow) Fail?
-			actual = &mongodoc.Resource{Name: resName}
+			// The router converts nil into params.ErrMetadataNotFound.
+			return notFound, nil
 		} else if err != nil {
-			return params.Resource{}, errgo.Mask(err)
+			return nil, errgo.Mask(err)
 		}
 		doc = actual
 	}
 	result := Resource2API(doc, entity.CharmMeta)
-	return result, nil
+	return &result, nil
 }
 
 // GET id/meta/resources

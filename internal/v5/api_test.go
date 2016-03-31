@@ -92,6 +92,9 @@ type metaEndpoint struct {
 	// name names the meta endpoint.
 	name string
 
+	// channel indicates the channel that should be used for the test.
+	channel params.Channel
+
 	// exclusive specifies whether the endpoint is
 	// valid for charms only (charmOnly), bundles only (bundleOnly)
 	// or to both (zero).
@@ -529,67 +532,81 @@ var metaEndpoints = []metaEndpoint{{
 }, {
 	name: "resource/for-store",
 	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
+		var notFound *params.Resource
 		entity, err := store.FindEntity(url, nil)
 		if err != nil {
-			return &params.Resource{}, err
+			return nil, err
 		}
 		if entity.URL.Series == "bundle" {
-			return &params.Resource{}, nil
+			return notFound, nil // triggers params.ErrMetadataNotFound
 		}
 		docs, err := store.ListResources(entity, params.UnpublishedChannel)
 		if err != nil {
-			return &params.Resource{}, err
+			return nil, err
 		}
 		for _, doc := range docs {
 			if doc.Name == "for-store" {
-				return v5.Resource2API(doc, entity.CharmMeta), nil
+				result := v5.Resource2API(doc, entity.CharmMeta)
+				return &result, nil
 			}
 		}
-		return v5.Resource2API(&mongodoc.Resource{Name: "for-store"}, entity.CharmMeta), nil
+		return notFound, nil // triggers params.ErrMetadataNotFound
 	},
 	exclusive: charmOnly,
 	checkURL:  newResolvedURL("cs:~charmers/utopic/starsay-17", 17),
 	assertCheckData: func(c *gc.C, data interface{}) {
-		c.Assert(data, jc.DeepEquals, params.Resource{
+		c.Assert(data, gc.FitsTypeOf, (*params.Resource)(nil))
+		ch := storetesting.Charms.CharmDir("starsay")
+		reader := extractResources(c, ch)["for-store"]
+		blob := resourceBlob(c, reader)
+		doc := &mongodoc.Resource{
 			Name:        "for-store",
-			Type:        "file",
-			Path:        "dummy.tgz",
-			Description: "One line that is useful when operators need to push it.",
-			Origin:      "upload",
-		})
+			Revision:    0,
+			Fingerprint: blob.Fingerprint,
+			Size:        blob.Size,
+		}
+		expected := v5.Resource2API(doc, ch.Meta())
+		c.Check(data, jc.DeepEquals, &expected)
 	},
 }, {
-	name: "resource/for-store/1",
+	name: "resource/for-store/0",
 	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
+		var notFound *params.Resource
 		entity, err := store.FindEntity(url, nil)
 		if err != nil {
-			return params.Resource{}, err
+			return nil, err
 		}
 		if entity.URL.Series == "bundle" {
-			return params.Resource{}, nil
+			return notFound, nil // triggers params.ErrMetadataNotFound
 		}
-		doc, err := store.ResourceInfo(entity, "for-store", 1)
+		doc, err := store.ResourceInfo(entity, "for-store", 0)
 		if charmstore.IsResourceNotFound(err) {
-			doc = &mongodoc.Resource{Name: "for-store"}
+			return notFound, nil // triggers params.ErrMetadataNotFound
 		} else if err != nil {
-			return params.Resource{}, nil
+			return nil, err
 		}
 		result := v5.Resource2API(doc, entity.CharmMeta)
-		return result, nil
+		return &result, nil
 	},
 	exclusive: charmOnly,
 	checkURL:  newResolvedURL("cs:~charmers/utopic/starsay-17", 17),
 	assertCheckData: func(c *gc.C, data interface{}) {
-		c.Assert(data, jc.DeepEquals, params.Resource{
+		c.Assert(data, gc.FitsTypeOf, (*params.Resource)(nil))
+		ch := storetesting.Charms.CharmDir("starsay")
+		reader := extractResources(c, ch)["for-store"]
+		blob := resourceBlob(c, reader)
+		doc := &mongodoc.Resource{
 			Name:        "for-store",
-			Type:        "file",
-			Path:        "dummy.tgz",
-			Description: "One line that is useful when operators need to push it.",
-			Origin:      "upload",
-		})
+			Revision:    0,
+			Fingerprint: blob.Fingerprint,
+			Size:        blob.Size,
+		}
+		expected := v5.Resource2API(doc, ch.Meta())
+		c.Check(data, jc.DeepEquals, &expected)
 	},
 }, {
-	name: "resources",
+	name:    "resources",
+	channel: params.UnpublishedChannel,
 	get: func(store *charmstore.Store, url *router.ResolvedURL) (interface{}, error) {
 		entity, err := store.FindEntity(url, nil)
 		if err != nil {
@@ -598,7 +615,7 @@ var metaEndpoints = []metaEndpoint{{
 		if entity.URL.Series == "bundle" {
 			return []params.Resource{}, nil
 		}
-		channel := params.UnpublishedChannel // the default
+		channel := params.UnpublishedChannel
 		docs, err := store.ListResources(entity, channel)
 		if err != nil {
 			return docs, err
@@ -618,25 +635,20 @@ var metaEndpoints = []metaEndpoint{{
 	exclusive: charmOnly,
 	checkURL:  newResolvedURL("cs:~charmers/utopic/starsay-17", 17),
 	assertCheckData: func(c *gc.C, data interface{}) {
-		c.Assert(data, jc.DeepEquals, []params.Resource{{
-			Name:        "for-install",
-			Type:        "file",
-			Path:        "initial.tgz",
-			Description: "get things started",
-			Origin:      "upload",
-		}, {
-			Name:        "for-store",
-			Type:        "file",
-			Path:        "dummy.tgz",
-			Description: "One line that is useful when operators need to push it.",
-			Origin:      "upload",
-		}, {
-			Name:        "for-upload",
-			Type:        "file",
-			Path:        "config.xml",
-			Description: "Who uses xml anymore?",
-			Origin:      "upload",
-		}})
+		ch := storetesting.Charms.CharmDir("starsay")
+		readers := extractResources(c, ch)
+		c.Assert(data, gc.HasLen, len(readers))
+		for _, res := range data.([]params.Resource) {
+			reader := readers[res.Name]
+			blob := resourceBlob(c, reader)
+			doc := &mongodoc.Resource{
+				Name:        res.Name,
+				Revision:    0,
+				Fingerprint: blob.Fingerprint,
+				Size:        blob.Size,
+			}
+			c.Check(res, jc.DeepEquals, v5.Resource2API(doc, ch.Meta()))
+		}
 	},
 }, {
 	name: "published",
@@ -741,6 +753,12 @@ func (s *APISuite) addTestEntities(c *gc.C) []*router.ResolvedURL {
 			s.addPublicBundleFromRepo(c, e.URL.Name, e, true)
 		} else {
 			s.addPublicCharmFromRepo(c, e.URL.Name, e)
+
+			// Add resources for the entity, if any.
+			entity, err := s.store.FindEntity(e, nil)
+			c.Assert(err, jc.ErrorIsNil)
+			ch := storetesting.Charms.CharmDir(e.URL.Name)
+			addResources(c, s.store, entity, ch)
 		}
 		// Associate some extra-info data with the entity.
 		key := e.URL.Path() + "/meta/extra-info/key"
@@ -759,6 +777,9 @@ func (s *APISuite) TestMetaEndpointsSingle(c *gc.C) {
 		for _, url := range urls {
 			charmId := strings.TrimPrefix(url.String(), "cs:")
 			path := charmId + "/meta/" + ep.name
+			if ep.channel != params.NoChannel {
+				path += "?channel=" + string(ep.channel)
+			}
 			expectData, err := ep.get(s.store, url)
 			if err != nil && ep.isExcluded(url) {
 				// endpoint not relevant.
@@ -1764,15 +1785,20 @@ func (s *APISuite) TestMetaEndpointsAny(c *gc.C) {
 				continue
 			}
 			flags = append(flags, "include="+ep.name)
+			if ep.channel != params.NoChannel {
+				flags = append(flags, "channel="+string(ep.channel))
+			}
 			val, err := ep.get(s.store, url)
 			if err != nil && ep.isExcluded(url) {
 				// endpoint not relevant.
 				continue
 			}
 			c.Assert(err, gc.IsNil)
-			if val != nil {
-				expectData.Meta[ep.name] = val
+			if isNull(val) {
+				// should trigger params.ErrMetadataNotFound.
+				continue
 			}
+			expectData.Meta[ep.name] = val
 		}
 		s.assertGet(c, charmId+"/meta/any?"+strings.Join(flags, "&"), expectData)
 	}

@@ -223,7 +223,9 @@ func (s *commonSuite) addPublicCharm(c *gc.C, ch charm.Charm, rurl *router.Resol
 }
 
 func (s *commonSuite) setPublic(c *gc.C, rurl *router.ResolvedURL) {
-	err := s.store.SetPerms(&rurl.URL, "stable.read", params.Everyone)
+	err := s.store.SetPerms(&rurl.URL, "unpublished.read", params.Everyone)
+	c.Assert(err, gc.IsNil)
+	err = s.store.SetPerms(&rurl.URL, "stable.read", params.Everyone)
 	c.Assert(err, gc.IsNil)
 	err = s.store.Publish(rurl, params.StableChannel)
 	c.Assert(err, gc.IsNil)
